@@ -1,0 +1,74 @@
+
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Editor de Arquivos Mercante</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="logo-text">Matheus Heringer - Log-In Logística Integrada</div>
+
+  <main class="tudo">
+    <h1>Editor Mercante</h1>
+    <p class="descricao">
+      Altere os portos do arquivo e gere uma nova versão em TXT.
+    </p>
+
+    <form id="mercanteForm">
+      <div class="campo">
+        <label for="arquivo">Arquivo original (.txt):</label>
+        <input
+          type="file"
+          id="arquivo"
+          accept=".txt,text/plain"
+          required
+        >
+      </div>
+
+      <div class="campo">
+        <label for="origem">Novo porto de origem:</label>
+        <input
+          type="text"
+          id="origem"
+          placeholder="Ex.: BRPEC001"
+          pattern="BR[A-Z]{3}[0-9]{3}"
+          maxlength="8"
+          title="Informe um código no formato BRABC123"
+          required
+        >
+      </div>
+
+      <div class="campo">
+        <label for="destino">Novo porto de destino:</label>
+        <input
+          type="text"
+          id="destino"
+          placeholder="Ex.: BRITA016"
+          pattern="BR[A-Z]{3}[0-9]{3}"
+          maxlength="8"
+          title="Informe um código no formato BRABC123"
+          required
+        >
+      </div>
+
+      <button id="btn" type="submit">
+        Processar arquivo
+      </button>
+
+      <button id="limpar" type="button">
+        Limpar campos
+      </button>
+    </form>
+
+    <div id="resultado" role="status" aria-live="polite" hidden></div>
+
+    <button id="baixar" type="button" hidden>
+      Baixar arquivo editado
+    </button>
+  </main>
+
+  <script src="funcao.js"></script>
+</body>
+</html>
