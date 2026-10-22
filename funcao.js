@@ -20,7 +20,17 @@ function mostrarMensagem(mensagem, tipo = "sucesso") {
 }
 
 function validarCodigo(codigo) {
-  return /^BR[A-Z]{3}\d{3}$/.test(codigo);
+  return /^(BR)?[A-Z]{3}\d{3}$/.test(codigo);
+}
+
+function normalizarCodigo(codigo) {
+  codigo = codigo.trim().toUpperCase();
+
+  if (!codigo.startsWith("BR")) {
+    codigo = "BR" + codigo;
+  }
+
+  return codigo;
 }
 
 // =====================================================
@@ -42,22 +52,9 @@ function obterDadosCabecalho(conteudo) {
 
   const cabecalho = linhas[indiceCabecalho];
 
-  /*
-   * Estrutura:
-   *
-   * ...DATA...DATA...BRSSZBRMAO085NMAOM
-   *
-   * BRSSZ = prefixo da origem
-   * BRMAO = prefixo do destino
-   * 085   = número da viagem
-   * NMAOM = sufixo do cabeçalho
-   *
-   * O sufixo aceita qualquer letra final.
-   * A viagem é capturada separadamente e preservada.
-   */
-
+  // Aceita letra ou número no último caractere do sufixo.
   const padrao =
-    /(\d{8})(\d{8})(BR[A-Z]{3})(BR[A-Z]{3})(\d+)(N[A-Z]{3})([A-Z])/;
+    /(\d{8})(\d{8})(BR[A-Z]{3})(BR[A-Z]{3})(\d+)(N[A-Z]{3})([A-Z0-9])/;
 
   const trecho = cabecalho.match(padrao);
 
@@ -102,17 +99,6 @@ function identificarPortosNoNome(nomeArquivo) {
     ? nomeArquivo.slice(0, -extensao.length)
     : nomeArquivo;
 
-  /*
-   * Exemplo 1:
-   * LOG-INJACARANDA-198PECBRPEC001PECBRMAO00607102026115644
-   *
-   * Exemplo 2:
-   * LOG-INENDURANCE-085SSZBRSSZ016SSZBRMAO00609102026162320
-   *
-   * A estrutura é identificada dinamicamente.
-   * O nome do navio, a viagem e o trecho final são preservados.
-   */
-
   const padrao =
     /^(.*-\d+)([A-Z]{3})(BR[A-Z]{3}\d{3})([A-Z]{3})(BR[A-Z]{3}\d{3})(.*)$/i;
 
@@ -146,29 +132,33 @@ function identificarPortos(conteudo, nomeArquivo) {
   const origemAtual = dadosNome.origemAtual;
   const destinoAtual = dadosNome.destinoAtual;
 
-  // Confere os códigos completos com os prefixos do M4I.
   if (!origemAtual.startsWith(dadosM4I.prefixoOrigem)) {
     throw new Error(
-      `A origem ${origemAtual} do nome do arquivo não corresponde ao prefixo ${dadosM4I.prefixoOrigem} do M4I.`
+      "A origem " + origemAtual +
+      " do nome do arquivo não corresponde ao prefixo " +
+      dadosM4I.prefixoOrigem + " do M4I."
     );
   }
 
   if (!destinoAtual.startsWith(dadosM4I.prefixoDestino)) {
     throw new Error(
-      `O destino ${destinoAtual} do nome do arquivo não corresponde ao prefixo ${dadosM4I.prefixoDestino} do M4I.`
+      "O destino " + destinoAtual +
+      " do nome do arquivo não corresponde ao prefixo " +
+      dadosM4I.prefixoDestino + " do M4I."
     );
   }
 
-  // Confere se os códigos completos estão no conteúdo.
   if (!conteudo.includes(origemAtual)) {
     throw new Error(
-      `O código completo de origem ${origemAtual} não foi encontrado no TXT.`
+      "O código completo de origem " + origemAtual +
+      " não foi encontrado no TXT."
     );
   }
 
   if (!conteudo.includes(destinoAtual)) {
     throw new Error(
-      `O código completo de destino ${destinoAtual} não foi encontrado no TXT.`
+      "O código completo de destino " + destinoAtual +
+      " não foi encontrado no TXT."
     );
   }
 
@@ -196,13 +186,6 @@ function atualizarCodigosArquivo(
     [destinoAtual, novoDestino]
   ]);
 
-  /*
-   * Atualiza todas as ocorrências dos códigos completos
-   * em todas as linhas, incluindo C401 e outros registros.
-   *
-   * Não substitui números de viagem isolados.
-   */
-
   return conteudo.replace(
     /BR[A-Z]{3}\d{3}/gi,
     codigo => substituicoes.get(codigo.toUpperCase()) || codigo
@@ -218,8 +201,9 @@ function atualizarCabecalhoMercante(
   novaOrigem,
   novoDestino
 ) {
+  // O último caractere pode ser letra ou número.
   const padrao =
-    /(BR[A-Z]{3})(BR[A-Z]{3})(\d+)(N[A-Z]{3})([A-Z])/;
+    /(BR[A-Z]{3})(BR[A-Z]{3})(\d+)(N[A-Z]{3})([A-Z0-9])/;
 
   if (!padrao.test(cabecalho)) {
     throw new Error(
@@ -235,21 +219,15 @@ function atualizarCabecalhoMercante(
       prefixoDestino,
       numeroViagem,
       sufixoDestino,
-      letraFinal
+      caractereFinal
     ) => {
       const novoPrefixoOrigem = novaOrigem.slice(0, 5);
       const novoPrefixoDestino = novoDestino.slice(0, 5);
 
-      /*
-       * Atualiza as três letras do sufixo conforme o destino.
-       * Preserva a letra final original.
-       *
-       * NMAOF -> NJAOF
-       * NMAOM -> NKKKM
-       */
-
+      // Atualiza o sufixo conforme o novo destino,
+      // preservando o último caractere original.
       const novoSufixo =
-        "N" + novoDestino.slice(2, 5) + letraFinal;
+        "N" + novoDestino.slice(2, 5) + caractereFinal;
 
       return (
         novoPrefixoOrigem +
@@ -283,13 +261,6 @@ function gerarNomeArquivo(
     );
   }
 
-  /*
-   * O marcador dos dois segmentos segue o padrão solicitado:
-   * utiliza as três letras da nova origem.
-   *
-   * Navio, viagem, trecho final e extensão são preservados.
-   */
-
   const novoMarcador = novaOrigem.slice(2, 5);
 
   return (
@@ -316,11 +287,8 @@ form.addEventListener("submit", async function(event) {
 
   const arquivo = arquivoInput.files[0];
 
-  const novaOrigem =
-    origemInput.value.trim().toUpperCase();
-
-  const novoDestino =
-    destinoInput.value.trim().toUpperCase();
+  const origemDigitada = origemInput.value.trim().toUpperCase();
+  const destinoDigitado = destinoInput.value.trim().toUpperCase();
 
   if (!arquivo) {
     mostrarMensagem("Selecione um arquivo TXT.", "erro");
@@ -328,15 +296,18 @@ form.addEventListener("submit", async function(event) {
   }
 
   if (
-    !validarCodigo(novaOrigem) ||
-    !validarCodigo(novoDestino)
+    !validarCodigo(origemDigitada) ||
+    !validarCodigo(destinoDigitado)
   ) {
     mostrarMensagem(
-      "Confira os códigos. O formato esperado é BRABC123.",
+      "Confira os códigos. Utilize SSZ111 ou BRSSZ111, por exemplo.",
       "erro"
     );
     return;
   }
+
+  const novaOrigem = normalizarCodigo(origemDigitada);
+  const novoDestino = normalizarCodigo(destinoDigitado);
 
   if (novaOrigem === novoDestino) {
     mostrarMensagem(
@@ -349,7 +320,6 @@ form.addEventListener("submit", async function(event) {
   try {
     const conteudoOriginal = await arquivo.text();
 
-    // Identifica os portos e a viagem dinamicamente.
     const dados = identificarPortos(
       conteudoOriginal,
       arquivo.name
@@ -362,12 +332,12 @@ form.addEventListener("submit", async function(event) {
     } = dados;
 
     const confirmacao =
-      `Arquivo: ${arquivo.name}\n\n` +
-      `Viagem: ${numeroViagem}\n` +
-      `Origem atual: ${origemAtual}\n` +
-      `Destino atual: ${destinoAtual}\n\n` +
-      `Nova origem: ${novaOrigem}\n` +
-      `Novo destino: ${novoDestino}\n\n` +
+      "Arquivo: " + arquivo.name + "\n\n" +
+      "Viagem: " + numeroViagem + "\n" +
+      "Origem atual: " + origemAtual + "\n" +
+      "Destino atual: " + destinoAtual + "\n\n" +
+      "Nova origem: " + novaOrigem + "\n" +
+      "Novo destino: " + novoDestino + "\n\n" +
       "Deseja continuar?";
 
     if (!window.confirm(confirmacao)) {
@@ -375,7 +345,7 @@ form.addEventListener("submit", async function(event) {
       return;
     }
 
-    // Atualiza os códigos completos no arquivo inteiro.
+    // Substitui os códigos completos em todas as linhas.
     let conteudo = atualizarCodigosArquivo(
       conteudoOriginal,
       origemAtual,
@@ -397,7 +367,7 @@ form.addEventListener("submit", async function(event) {
       );
     }
 
-    // Atualiza os prefixos e o sufixo, preservando a viagem.
+    // Atualiza os prefixos e o sufixo do M4I.
     partes[indiceCabecalho] = atualizarCabecalhoMercante(
       partes[indiceCabecalho],
       novaOrigem,
@@ -406,7 +376,7 @@ form.addEventListener("submit", async function(event) {
 
     conteudo = partes.join("");
 
-    // Atualiza o nome sem alterar navio, viagem ou trecho final.
+    // Atualiza o nome do arquivo.
     nomeArquivoGerado = gerarNomeArquivo(
       arquivo.name,
       origemAtual,
@@ -421,15 +391,15 @@ form.addEventListener("submit", async function(event) {
     );
 
     mostrarMensagem(
-      `Arquivo processado!\n\n` +
-      `Viagem preservada: ${numeroViagem}\n\n` +
-      `Origem anterior: ${origemAtual}\n` +
-      `Nova origem: ${novaOrigem}\n\n` +
-      `Destino anterior: ${destinoAtual}\n` +
-      `Novo destino: ${novoDestino}\n\n` +
-      `Arquivo gerado: ${nomeArquivoGerado}\n\n` +
-      `Todas as linhas foram processadas.\n` +
-      `Confira o arquivo antes de enviá-lo ao Mercante.`,
+      "Arquivo processado!\n\n" +
+      "Viagem preservada: " + numeroViagem + "\n\n" +
+      "Origem anterior: " + origemAtual + "\n" +
+      "Nova origem: " + novaOrigem + "\n\n" +
+      "Destino anterior: " + destinoAtual + "\n" +
+      "Novo destino: " + novoDestino + "\n\n" +
+      "Arquivo gerado: " + nomeArquivoGerado + "\n\n" +
+      "Todas as linhas foram processadas.\n" +
+      "Confira o arquivo antes de enviá-lo ao Mercante.",
       "sucesso"
     );
 
